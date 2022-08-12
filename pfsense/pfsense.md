@@ -682,7 +682,7 @@ To use `-J`, each ssh server in the chain needs your public key.
 Separate each internal host along the path with commas `,` and specify ports as `user@host:<port>`:
 ```bash
 ssh -J user@public-ip:port,user@internaljump1:port,user@internaljump2:port -p <port> -L 127.0.0.1:8080:127.0.0.1:80 user@interalhost.ip
-#      ^___________________________________________________________________^  ^_____________________________________^
+#    ^___________________________________________________________________^  ^_____________________________________^
 #                       The -J argument is one string                         All additional ssh arguments follow as normal
 ```
 
