@@ -18,6 +18,8 @@ bw logout
 
 ## Programmatically work with attachments
 
+Without a way to do this from any of the GUI based clients, this will help you work with large numbers of attachments.
+
 **WARNING**: *Do not do use `bw` if you have certain types of `PowerShell` logging enabled, for example transcript logging. Similar to enabling clipboard monitoring in Sysmon, you can potentially write your entire vault to disk in clear text.*
 
 - [About Logging in PowerShell](https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_logging?view=powershell-5.1)
@@ -34,36 +36,58 @@ To avoid issues here, use variables for `bw` queries as demonstrated below. The 
 
 To check your PowerShell profile settings to see if this is enabled, review the locations mentioned [here](https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_profiles?view=powershell-7.2). Also [check your registry](https://github.com/carlospolop/hacktricks/tree/master/windows-hardening/windows-local-privilege-escalation#powershell-transcript-files) to see if it's enabled there as well.
 
-Retrieve an `itemid`
+#### Retrieve an `itemid`
+
+This should be only one line, so double quoting `"$()"` is fine
 ```bash
-# Get an itemid
-# This should be only one line, so double quoting "$()" is fine
-bw list items --search <query> --pretty | grep -P "^\s+\"id\":\s\".*\",$" | cut -d '"' -f 4
-
-# Get the itemid of your entry named 'GitHub'
-bw list items --search GitHub --pretty | grep -P "^\s+\"id\":\s\".*\",$" | cut -d '"' -f 4
-# If mutiple results are found, remove the regex to see what's returned and refine your query
-
-# Put the query for the itemid into a variable
-ITEM_ID="$(bw list items --search <query> --pretty | grep -P "^\s+\"id\":\s\".*\",$" | cut -d '"' -f 4)"
+bw list items --search <query> --pretty | grep -P "^\s+\"id\":\s\".*\",$" | cut -d '"' -f 4 | head -n1
 ```
 
-Upload files
-```bash
-# You'll receive continuous responses to the console window for each attachment uploaded
-for file in ../path/*.test; do bw create attachment --file "$file" --itemid "$ITEM_ID"; done
+Get the `itemid` of your entry named 'GitHub'
 
-# Confirm the files are listed under "$ITEM_ID" attachments
+If mutiple results are found, remove the regex to see what's returned and refine your query
+```bash
+bw list items --search GitHub --pretty | grep -P "^\s+\"id\":\s\".*\",$" | cut -d '"' -f 4 | head -n1
+```
+
+Put the query for the `itemid` into a variable
+```bash
+ITEM_ID="$(bw list items --search <query> --pretty | grep -P "^\s+\"id\":\s\".*\",$" | cut -d '"' -f 4 | head -n1)"
+```
+
+#### Upload files
+
+You'll receive continuous responses to the console window for each attachment uploaded.
+```bash
+for file in ../path/*.test; do bw create attachment --file "$file" --itemid "$ITEM_ID"; done
+```
+
+Confirm the files are listed under "$ITEM_ID" attachments
+```bash
 bw get item "$ITEM_ID" --pretty
 ```
 
-Delete attachments
-```bash
-# 80 is arbitrary, just a guess to an upper limit on how many attachments you may have - update this if you really have more
-# We grep for any matches *after* (-A) the list of attachments, as other entries above the attachments line (which we don't want) could also match this regex
-# DO NOT double quote the command substitution $(), this way each result is it's own line vs the list of results being a single string
-ATTACHMENT_IDS=$(bw get item "$ITEM_ID" --pretty | grep -A 80 -Px "^\s+\"attachments\": \[$" | grep -Px "^\s+\"id\": \"\w+\",$" | grep -Fv '-' | cut -d '"' -f 4)
+#### Enumerate attachments
 
-# DO double quote the variable of each "$file", or each line from the output above
+We grep for any matches *after* `-A` the list of attachments, as other entries above the attachments line (which we don't want) could also match this regex
+
+10000 is arbitrary, just a guess to an upper limit on how many lines of json the attachments cover - update this if you need to
+
+DO NOT double quote the command substitution `$()`, this way each result is it's own line vs the list of results being a single string
+```bash
+ATTACHMENT_IDS=$(bw get item "$ITEM_ID" --pretty | grep -A 10000 -Px "^\s+\"attachments\": \[$" | grep -Px "^\s+\"id\": \"\w+\",$" | grep -Fv '-' | cut -d '"' -f 4)
+```
+
+#### Download attachments
+
+DO double quote the variable of each `"$file"`, or each line from the output above
+```bash
+for file in $ATTACHMENT_IDS; do bw get attachment "$file" --itemid "$ITEM_ID"; done
+```
+
+#### Delete attachments
+
+Same as downloading, with `delete` instead of `get`
+```bash
 for file in $ATTACHMENT_IDS; do bw delete attachment "$file" --itemid "$ITEM_ID"; done
 ```
