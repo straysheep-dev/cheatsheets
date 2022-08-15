@@ -38,7 +38,6 @@ To check your PowerShell profile settings to see if this is enabled, review the 
 
 #### Retrieve an `itemid`
 
-This should be only one line, so double quoting `"$()"` is fine
 ```bash
 bw list items --search <query> --pretty | grep -P "^\s+\"id\":\s\".*\",$" | cut -d '"' -f 4 | head -n1
 ```
@@ -51,6 +50,8 @@ bw list items --search GitHub --pretty | grep -P "^\s+\"id\":\s\".*\",$" | cut -
 ```
 
 Put the query for the `itemid` into a variable
+
+This should be only one line, so double quoting `"$()"` is fine
 ```bash
 ITEM_ID="$(bw list items --search <query> --pretty | grep -P "^\s+\"id\":\s\".*\",$" | cut -d '"' -f 4 | head -n1)"
 ```
