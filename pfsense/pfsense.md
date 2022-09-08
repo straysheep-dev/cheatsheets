@@ -1915,6 +1915,123 @@ Excerpt from the installer:
 >     redef ignore_checksums = T;
 > ```
 
+# External Storage
+
+While pfSense should mainly be used as a firewall, and is not meant for long term storage or as a central logging server, it's ability to do a number of network forensics and debugging means at some point you may need to temporarily add external storage to the device. This is a good idea instead of letting a packet capture run overnight, only to later discover the partition (or worse the entire filesystem) has been flooded and no new data can be written, effectively halting the operation of your firewall.
+
+The easiest way to walk through and familiarize yourself with these steps is in a VM. Pass through an external USB device to get started.
+
+The FreeBSD documentation on both [USB disks](https://docs.freebsd.org/en/books/handbook/disks/#usb-disks) and [Adding Disks](https://docs.freebsd.org/en/books/handbook/disks/#disks-adding) will help guide you through this process.
+
+The first thing you'll see from a terminal when connecting the external device, in this example we'll use a 64GB USB drive, is the device's entry in `dmesg`. Use `dmesg | grep '<device>'` to review this information later (where `<device>` for example could be `da1`).
+
+We'll also use `da1` as the device name for the rest of these examples.
+
+Confirm the device's name under `/dev/` with `ls -l /dev/da1*`
+
+From here follow the steps in the FreeBSD manual to create a new UFS (this will work fine even if pfSense is running on a ZFS):
+
+- <https://www.freebsd.org/cgi/man.cgi?query=gpart&sektion=8&format=html#EXAMPLES>
+- <https://docs.freebsd.org/en/books/handbook/disks/#usb-disks>
+
+The following commands are mostly mirrored directly from those pages linked above:
+
+```tcsh
+sudo gpart destroy -F da1
+sudo gpart create -s GPT da1
+sudo gpart add -t freebsd-ufs -a 1M da1
+gpart show da1
+
+sudo newfs -U /dev/da1p1
+
+sudo vi /etc/fstab
+```
+
+Add the following to `/etc/fstab`, replacing "external" with whatever you'd like to name your device's mount point:
+```
+/dev/da1p1		/mnt/external	ufs	rw	2	2
+```
+
+Finally, create the mount point and mount the device:
+```tcsh
+sudo mkdir /mnt/external
+sudo mount /mnt/external
+```
+
+Your external storage is ready for use. Be sure to create a folder within this filesystem that is writable by the correct users (if you don't want to be running as root to write to it).
+
+To undo all of these steps, erasing the external device to an empty state and removing the external filesystem from pfSense:
+
+```tcsh
+sudo umount /mnt/external
+sudo gpart destroy -F da1
+sudo rm -rf /mnt/external
+
+sudo vi /etc/fstab
+# remove the entry with the external filesystem's mount point
+```
+
+### ZFS
+
+The same can be done with `zfs`. First, be sure the device is completely empty and not mounted to the filesystem.
+
+If it's currently mounted, `zpool` will raise an error. If it's not empty, this operation will make the data (likely) unrecoverable.
+
+```tcsh
+sudo umount /mnt/external
+sudo gpart destroy -F da1
+```
+
+The [zfs chapter in the FreeBSD handbook](https://docs.freebsd.org/en/books/handbook/zfs/) goes into detail on how you can configure this type of filesystem.
+
+This [Ubuntu tutorial on setting up zfs storage](https://ubuntu.com/tutorials/setup-zfs-storage-pool#3-creating-a-zfs-pool) is also a good point of reference.
+
+For our purposes, to quickly attach an external device (taken and adapted from the examples linked above):
+
+```tcsh
+sudo mkdir /mnt/external
+sudo zpool create -m /mnt/external external /dev/da1
+```
+
+This will mount the device at `/external` and show it under `df -h` as well as `mount`.
+
+When you're done, to erase the device and it's contents from the filesystem:
+
+```tcsh
+sudo zpool destroy external
+```
+
+You may also notice even after erasing this device with `dd`, `gpart`, or `zpool`, the device still contains the `zfs_member` label.
+
+There are two ways to do this. Using `zpool`, this stackexchange post demonstrates the command:
+
+- <https://unix.stackexchange.com/questions/335377/zero-out-deprecated-zfs-label-from-disk-with-dd>
+
+```tcsh
+sudo zpool labelclear /dev/da1
+```
+
+Another way is to erase both the beginning and the end of the device with `dd`. This can be done using the `seek` option.
+
+- <https://www.gnu.org/software/coreutils/manual/html_node/dd-invocation.html#dd-invocation>
+
+A way to calculate the offset is by obtaining the device size in MB with `dmesg`:
+
+```tcsh
+dmesg | grep 'byte sectors'
+```
+
+You're looking for the line in dmesg starting with our device name, in this example it's `da1`.
+
+Using the same example of a 64GB disk, we see `58656MB` as the total size. We want to aim for the last few MB, so we'll use `58650` in our command.
+
+These two `dd` commands will successfully remove the zfs label:
+
+```tcsh
+sudo dd if=/dev/zero of=/dev/da1 bs=1M status=progress count=10
+sudo dd if=/dev/zero of=/dev/da1 bs=1M status=progress seek=58650
+```
+
 # Troubleshooting:
 
 **TO DO**
