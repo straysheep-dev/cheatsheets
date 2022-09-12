@@ -742,18 +742,71 @@ Similarly, VMware (on Windows) allows USB arbitration at plug-in, so you can cho
 
 ### Protect the Management Port
 
-If the device will ever be in an untrusted environment, here are some steps you can take to secure it:
+Generally management via a web interface should only be accessible from a management subnet / dedicate management interface. The workaround if you require remote access, or if the network is completely flat, is to configure the web interface to only listen on localhost (`127.0.0.1` and `::1`), and open **public key based** SSH for access.
 
-- Set static ARP mappings to MAC addresses of only devices you trust / will use for management
-- Only expose the SSH service on the management interface, requiring portforwarding over SSH to reach the WebGUI
+This above guidance is fairly generic and applies to any networking appliance.
+
+The steps below detail how to secure a pfSense device if it's also *physically* in an untrusted environment. Ultimately physical access means game over, but ideally you'd want to at minimum detect tampering. Everything under the *recommended* section attempts to require an adversary to either completely reset the device to factory defaults or open the case to gain access.
+
+Two areas this guide does not yet cover:
+
+- Attacks leveraging USB ports
+- Attacks against the network card itself
+
+#### Recommended:
+
+- Require portforwarding over SSH to reach the WebGUI
+- Delete the default `Anti-Lockout Rule`
+	* Create a firewall rule to allow inbound ssh access:
+		- Protocol: TCP
+		- Source IP: *
+		- Source Port: *
+		- Destination IP: This Firewall
+		- Destination Port: `<ssh-port>`
+	* Be sure this rule is active on the LAN / management port so you do not lock yourself out when removing the default Anti-Lockout Rule
+	* `System > Advanced > [x] Disable webConfigurator anti-lockout rule`
+	* > Hint: the "Set interface(s) IP address" option in the console menu resets this setting as well.
+- Limit private traffic on the LAN / management port to only SSH on the firewall itself
+	* If a WAN cable is accidentally (or malicously) plugged in to the management interface, it's essentially the same attack surface as the WAN interface
+	* A management device connected to the LAN / management interface can still reach the public internet with a block rule for private addresses followed by a pass rule to any
+	* If you need to reach other internal hosts, use an SSH session on the firewall itself, or use the firewall as a `-J` jump proxy
 - Create a low-privileged user
 - Password protect the serial console
 - Fill the screws on the bottom of the device with paint / nail polish to detect tampering
 - Review `system.log` for connection attempts to the physical ports while the device is unattended
 	* `Status > System Logs > System > General`
-	* Filter for '`rc.linkup`' in `message`, this will show when interfaces had ethernet connections made.
+	* Filter for '`rc.linkup`' in `message`, this will show when interfaces had ethernet connections made
 	* Other filters for this: `DEVD` and `Hotplug`
-	* This is useful for determining attempted intrusion or tampering while traveling, if for example you decide to bring a pfSense device as a mobile router (the size of the SG-1100 makes this feasible).
+	* This is useful for determining attempted intrusion or tampering while traveling, if for example you decide to bring a pfSense device as a mobile router (the size of the SG-1100 makes this feasible)
+
+#### Optional:
+
+- Set static ARP mappings to MAC addresses of only devices you trust / will use for management
+- Only expose the SSH service on the management interface (lower priority, SSH is generally OK to be publicly facing)
+- Firewall access to the SSH service by source IP (lower priority, especially if you don't always have a static source IP)
+
+Always confirm your settings with `nmap`:
+
+```bash
+nmap -n -Pn -sT -p- -e <iface> --open -T4 <firewall-ip>
+Starting Nmap 7.80 ( https://nmap.org ) at 2022-01-23 12:00 EDT
+Nmap scan report for <firewall-ip>
+Host is up (0.0013s latency).
+Not shown: 65534 filtered ports
+Some closed ports may be reported as filtered due to --defeat-rst-ratelimit
+PORT   STATE SERVICE
+22/tcp open  ssh
+
+Nmap done: 1 IP address (1 host up) scanned in 87.72 seconds
+```
+
+This will use a TCP connect scan with normal user privileges to check all 65535 ports on the firewall. You want ssh to be the only service exposed.
+
+You should also try to reach other internal subnets from the managemnt interface with either `ping` or `nmap`.
+
+The `<iface>` in this case is the network interface on the device you're running the scan *from*, for example it could be `eth0` or `wlp1s0`.
+
+If a WAN cable connects to another internal LAN or OPT port, at minimum, most likely DNS and SSH are what will be reachable.
 
 ---
 
@@ -1614,7 +1667,13 @@ By default pfSense has no `man` command to view manuals like Linux or macOS typi
 
 Running a command either with `--help`, `-h`, or without arguments will likely print basic usage details
 
-## System Services
+## CLI Firewall
+
+<https://docs.netgate.com/pfsense/en/latest/firewall/pf-ruleset.html>
+
+<https://docs.freebsd.org/en/books/handbook/firewalls/#firewalls-pf>
+
+## CLI System Services
 
 <https://docs.freebsd.org/en/books/handbook/config/>
 
