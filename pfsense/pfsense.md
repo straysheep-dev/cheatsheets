@@ -337,6 +337,8 @@ Under `Services > DNS Resolver`:
 - [x] Use SSL/TLS for outgoing DNS
 - [x] [Optional] DHCP Registration / Static DHCP (Allows Dns resoultion of local `<hostname>.<localdomain>`)
 
+**IMPORTANT**: Be sure your `/var/unbound/unbound.conf` contains the DNS over TLS entries once you configure and apply them in the GUI.
+
 For logging, the following three configuration options can be applied. Only `log-queries` is uncommented here to avoid overwhealming the logs.
 
 Add any of the following to the DNS resolver's custom options under 'server':
@@ -1188,6 +1190,23 @@ Don't forget you can also clone these VM's, and run pfSense behind pfSense. Desp
 #### pfSense Lab VM Continued
 
 Taking the above examples, you could dedicate a network interface to OSINT, following the setup recommended in [Open Source Intelligence Techniques](https://inteltechniques.com/book1.html). This will replicate everything done on phyiscal hardware, such as the VPN + kill switch, only here you can manage and experiment with all of this virtually.
+
+They key points to remember no matter what kind of VPN client you setup:
+
+- If you're dedicating a subnet to run behind the VPN, be sure you've added a network interface as a LAN segment to the pfSense VM ahead of time
+- Add the VPN CA to your cert manager
+- Add the VPN client profile
+	* Don't pull routes
+	* Refuse any non-stub compression
+- Interfaces > Assignments > Add the new OVPN interface *you just created and named*
+- Here you'd also add the interface and DHCP server details for the dedicated subnet, just as described in [network interfaces](#network-interfaces)
+- Configure manual outbound NAT, set the default gateway to the OVPN interface *you just created and named* for both outbound mappings
+	* You want to add the one you named, and not the default virtual interface of 'OpenVPN' which is listed if OpenVPN is connected and running
+- Firewall > Rules > Set any rules you require, be sure the default outbound rule has the OVPN interface *you just created and named* set as it's default gateway (do this under Advanced)
+- Once done, be sure to refresh the connection under Status > OpenVPN > Restart openvpn Service
+- Use a VM in that subnet (Kali live works well here) to check your public IP with `curl https://ipinfo.io/ip`
+- SSH into the pfSense VM, setup a listener to review DNS traffic for leaks with `sudo tcpdump -i em0 -n -vv -Q out port 53 -Z nobody`
+- Make requests from that subnet to review the packet capture
 
 Similarly, to do network testing you could network two or more additional pfSense systems behind a single 'main' VM, to communicate with each other. This will allow you to quickly spin up networking configurations and utilities, that generally work best across mutliple subnets and routes.
 
