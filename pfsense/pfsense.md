@@ -1663,6 +1663,57 @@ Useful log files:
 | Dns Logs      | `/var/log/resolver.log` |
 | Firewall Logs | `/var/log/filter.log`   |
 
+
+### Logging Network Traffic
+
+How to log and maintain network data using pfSense.
+
+This section would not exist without these resources:
+
+- https://github.com/0ptsec/optsecdemo
+- https://www.activecountermeasures.com/raspberry-pi-network-sensor-webinar-qa/
+- https://github.com/william-stearns (wstearns-ACM) in the Threat Hunter Community Discord
+- https://unix.stackexchange.com/questions/194863/delete-files-older-than-x-days (user basic6's answer)
+
+This is meant to run on any box with `tcpdump` available, and pairs well with the [external storage](#external-storage) section below:
+
+```bash
+sudo mkdir /mnt/external/pcaps
+sudo chown nobody /mnt/external/pcaps
+sudo chmod 750 /mnt/external/pcaps
+```
+
+What this does is sets the `pcaps/` to be owned by the user `nobody`, so when `tcpdump` drops privileges, the nobody user can write to that folder. The 0 in 750 prevents any other user context on the system from examining or modifying the pcaps.
+
+If you don't have an external storage device, be aware of your firewall's disk space and be sure to limit the pcap file rotation frequency via cron (below).
+
+`tcsh` does not understand command substitution, just use `pfSense.%Y%m%d%H%M%S`...
+```bash
+sudo /usr/sbin/tcpdump -i ethX -Z nobody -G 3600 -w /mnt/external/pcaps/pfSense.%Y%m%d%H%M%S.pcap
+```
+
+pfSense running tcpdump unprivileged:
+```bash
+sudo /usr/sbin/tcpdump -i ethX -Z nobody -G 3600 -w /tmp/pfSense.%Y%m%d%H%M%S.pcap '((tcp[13] & 0x17 != 0x10) or not tcp)'
+```
+
+pfSense running tcpdump as root:
+```bash
+sudo /usr/sbin/tcpdump -i ethX -G 3600 -w "$(sudo mktemp -d)/pfSense.%Y%m%d%H%M%S.pcap '((tcp[13] & 0x17 != 0x10) or not tcp)'
+```
+
+To rotate your pcap files based on a range of days, create the following task under `/etc/cron.d/pcap-rotation-service`:
+```
+# Cron task to rotate pcaps
+# Rotates pcap files under $PCAP_PATH based on the range of time in $DAYS
+# For example, +60 means the last 60 days of pcaps are maintained
+
+* 0  * * * root /usr/bin/find $PCAP_PATH -type f -mtime +$DAYS -delete" >> /etc/cron.d/pcap-rotation-service
+```
+
+Replacing `$PCAP_PATH` with where you're storing your pcap files, and `$DAYS` with how many days of network traffic you want to maintain. This means you will always have pcaps available of the most recent 60 days.
+
+
 #### Upgrade Log
 
 <https://docs.netgate.com/pfsense/en/latest/troubleshooting/upgrades.html#upgrade-log>
