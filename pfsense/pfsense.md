@@ -1692,15 +1692,21 @@ If you don't have an external storage device, be aware of your firewall's disk s
 sudo /usr/sbin/tcpdump -i ethX -Z nobody -G 3600 -w /mnt/external/pcaps/pfSense.%Y%m%d%H%M%S.pcap
 ```
 
+In all cases, replace `ethX` with the name of the interface you want to capture on. Ideally you would have a [SPAN port that's mirroring traffic from all interfaces](#bridging-multiple-interfaces-for-port-mirroring-span-port-for-traffic-monitoring), and capture on that.
+
 pfSense running tcpdump unprivileged:
 ```bash
-sudo /usr/sbin/tcpdump -i ethX -Z nobody -G 3600 -w /tmp/pfSense.%Y%m%d%H%M%S.pcap '((tcp[13] & 0x17 != 0x10) or not tcp)'
+sudo /usr/sbin/tcpdump -i ethX -Z nobody -G 3600 -w /tmp/pfSense.%Y%m%d%H%M%S.pcap '((tcp[13] & 0x17 != 0x10) or not tcp)' &
 ```
 
 pfSense running tcpdump as root:
 ```bash
-sudo /usr/sbin/tcpdump -i ethX -G 3600 -w "$(sudo mktemp -d)/pfSense.%Y%m%d%H%M%S.pcap '((tcp[13] & 0x17 != 0x10) or not tcp)'
+sudo /usr/sbin/tcpdump -i ethX -G 3600 -w "$(sudo mktemp -d)/pfSense.%Y%m%d%H%M%S.pcap '((tcp[13] & 0x17 != 0x10) or not tcp)' &
 ```
+
+The easiest way to run these commands is by appending an `&` to send them into the background. From here you can easily monitor them with `ps aux`.
+
+If you want to stop the capture running this way, obtain the pid of the root owned process running tcpdump you find with `ps aux`, then run `kill <pid>`.
 
 To rotate your pcap files based on a range of days, create the following task under `/etc/cron.d/pcap-rotation-service`:
 ```
@@ -1708,7 +1714,7 @@ To rotate your pcap files based on a range of days, create the following task un
 # Rotates pcap files under $PCAP_PATH based on the range of time in $DAYS
 # For example, +60 means the last 60 days of pcaps are maintained
 
-* 0  * * * root /usr/bin/find $PCAP_PATH -type f -mtime +$DAYS -delete" >> /etc/cron.d/pcap-rotation-service
+* 0  * * * root /usr/bin/find $PCAP_PATH -type f -mtime +$DAYS -delete
 ```
 
 Replacing `$PCAP_PATH` with where you're storing your pcap files, and `$DAYS` with how many days of network traffic you want to maintain. This means you will always have pcaps available of the most recent 60 days.
