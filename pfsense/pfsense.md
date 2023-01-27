@@ -1688,12 +1688,16 @@ This section would not exist without these resources:
 This is meant to run on any box with `tcpdump` available, and pairs well with the [external storage](#external-storage) section below:
 
 ```bash
+sudo pw groupadd logsync
 sudo mkdir /mnt/external/pcaps
-sudo chown nobody /mnt/external/pcaps
+sudo chown nobody:logsync /mnt/external/pcaps
 sudo chmod 750 /mnt/external/pcaps
+sudo groupmod logsync -m $YOUR_USER
 ```
 
-What this does is sets the `pcaps/` to be owned by the user `nobody`, so when `tcpdump` drops privileges, the nobody user can write to that folder. The 0 in 750 prevents any other user context on the system from examining or modifying the pcaps.
+Where `$YOUR_USER` is the account on pfSense you'll be connecting to over ssh to bring logs back to a central logging system.
+
+What this does is sets `pcaps/` to be owned by the user `nobody` and the group `logsync`, so when `tcpdump` drops privileges, the nobody user can write to that folder. The 5 in 750 allows any user that's part of the group `logsync` to view but not write to the folder. This is an easy way to limit permissions while scripting the collection of logs safely over ssh. The 0 in 750 prevents any other user context on the system from examining or modifying the pcaps.
 
 If you don't have an external storage device, be aware of your firewall's disk space and be sure to limit the pcap file rotation frequency via cron (below).
 
@@ -1730,7 +1734,28 @@ To rotate your pcap files based on a range of days, create the following task un
 Replacing `$PCAP_PATH` with where you're storing your pcap files, and `$DAYS` with how many days of network traffic you want to maintain. This means you will always have pcaps available of the most recent 60 days.
 
 
-#### Upgrade Log
+### Collecting Logs
+
+- <https://github.com/activecm/zeek-log-transport/blob/master/zeek_log_transport.sh>
+- <https://github.com/opsdisk/the_cyber_plumbers_handbook>
+
+To collect logs over ssh, you could use `cron` + `rsync` to automatically pull them into a central logging system.
+
+Modifying the ssh example from the rsync manual, here's what collecting logs from a pfSense system could look like:
+```bash
+rsync -arv --safe-links --delete -e ssh pfsense@172.31.199.101:"/mnt/external/pcaps/" /home/ubuntu/Logs/pcaps/
+```
+
+This "archives" (preserves unix file characteristics) recursively and verbosely (`-arv`), the remote files, ignoring dangerous symlinks if files happen to have been tampered with (`--safe-links`), deleting any extraneous files locally that aren't present remotely (`--delete`), over ssh (`-e ssh`), from the remote path of `/mnt/external/pcaps` to the local path of `/home/ubuntu/Logs/pcaps`.
+
+If you need to use something like a jump proxy, the same command from above would look like this:
+```bash
+rsync -arv --safe-links --delete -e "ssh -J <user>@<jump-hostname>:<port>" pfsense@172.31.199.101:"/mnt/external/pcaps/" /home/ubuntu/Logs/pcaps/
+```
+
+You'll want to review the rsync manual's `--rsh=COMMAND, -e` section for correctly encasing quotes and character escaping.
+
+### Upgrade Log
 
 <https://docs.netgate.com/pfsense/en/latest/troubleshooting/upgrades.html#upgrade-log>
 
