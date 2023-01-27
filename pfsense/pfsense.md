@@ -607,6 +607,16 @@ sudo pw groupmod somegroup -d user
 sudo pw groupmod zeek -d analyst1
 ```
 
+To create, review, and delete a group:
+
+<https://docs.freebsd.org/en/books/handbook/basics/#users-groups>
+
+```bash
+sudo pw groupadd logsync
+sudo pw groupshow logsync
+sudo pw groupdel logsync
+```
+
 To remove a user:
 
 ```bash
