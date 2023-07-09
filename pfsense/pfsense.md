@@ -1692,7 +1692,7 @@ sudo pw groupadd logsync
 sudo mkdir /mnt/external/pcaps
 sudo chown nobody:logsync /mnt/external/pcaps
 sudo chmod 750 /mnt/external/pcaps
-sudo groupmod logsync -m $YOUR_USER
+sudo pw groupmod logsync -m $YOUR_USER
 ```
 
 Where `$YOUR_USER` is the account on pfSense you'll be connecting to over ssh to bring logs back to a central logging system.
