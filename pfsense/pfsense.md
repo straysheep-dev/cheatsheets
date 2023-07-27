@@ -1197,7 +1197,7 @@ Don't forget you can also clone these VM's, and run pfSense behind pfSense. Desp
 
 ---
 
-#### pfSense Lab VM Continued
+#### pfSense Lab VM for OSINT
 
 Taking the above examples, you could dedicate a network interface to OSINT, following the setup recommended in [Open Source Intelligence Techniques](https://inteltechniques.com/book1.html). This will replicate everything done on phyiscal hardware, such as the VPN + kill switch, only here you can manage and experiment with all of this virtually.
 
@@ -1207,7 +1207,13 @@ They key points to remember no matter what kind of VPN client you setup:
 - Add the VPN CA to your cert manager
 - Add the VPN client profile
 	* Don't pull routes
+	* Don't pull DNS if you want to use pfSense for DNS over TLS / HTTPS
 	* Refuse any non-stub compression
+	* If your VPN service profiles share a common CA and TLS key, you can configure a single profile to connect to random endpoints
+		- Add one IP / port pair to the Endpoint Configuration section as normal
+		- Add the other IP / port pairs to Advanced Configuration > Custom Options, one per line, starting with "remote", ending with a semicolon, like: `remote <ip-address> <port>;`
+		- Add `remote-random;` to the Advanced Configuration > Custom Options
+		- Each time you restart the OpenVPN service, it will connect to a new endpoint
 - Interfaces > Assignments > Add the new OVPN interface *you just created and named*
 - Here you'd also add the interface and DHCP server details for the dedicated subnet, just as described in [network interfaces](#network-interfaces)
 - Configure manual outbound NAT, set the default gateway to the OVPN interface *you just created and named* for both outbound mappings
@@ -1218,7 +1224,20 @@ They key points to remember no matter what kind of VPN client you setup:
 - SSH into the pfSense VM, setup a listener to review DNS traffic for leaks with `sudo tcpdump -i em0 -n -vv -Q out port 53 -Z nobody`
 - Make requests from that subnet to review the packet capture
 
-Similarly, to do network testing you could network two or more additional pfSense systems behind a single 'main' VM, to communicate with each other. This will allow you to quickly spin up networking configurations and utilities, that generally work best across mutliple subnets and routes.
+To review your configuration:
+
+- Status > OpenVPN > Client Instance Statistics shows "Connected (Success)"
+- On the same page, ↻ restarting the client will cycle through IP addresses
+- `curl https://ipinfo.io/ip`
+- Visit `https://bgp.he.net/` from any browser within the subnet
+- Start with Status > System Logs > OpenVPN if you're encountering any issues
+
+The easiest and safest way to manage this connection from the host is by bridging the "WAN" side of the pfSense VM so that you can SSH port forward to hit the web interface like this: `ssh -p <port> -L 127.0.0.1:8443:127.0.0.1:443 <user>@<pfsense-ip>`. Browsing to `https://127.0.0.1:8443` on your host will take you to the pfSense web interface. Here you can monitor the connection as well as cycle and change endpoints by restarting the OpenVPN client. This is ideal over making the VPN connection from your host whether it's through the built in `openvpn` package on Linux, or a VPN service's client application. In both cases you avoid putting your host into the same subnet as the VPN, and in the latter you avoid installing additional software.
+
+
+#### pfSense Lab VM Continued
+
+Similarly, to do network testing you could network two or more additional pfSense systems behind a single 'main' pfSense VM, to communicate with each other. This will allow you to quickly spin up networking configurations and utilities, that generally work best across mutliple subnets and routes.
 
 ---
 
